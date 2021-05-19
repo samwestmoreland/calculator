@@ -25,6 +25,9 @@ void Token_stream::putback(Token t)
     full = true;    // buffer is now full
 }
 
+const char number = '8';
+const char quit = 'q';
+const char print = ';';
 Token Token_stream::get()
 {
     if (full) {
@@ -35,9 +38,14 @@ Token Token_stream::get()
     char ch;
     cin >> ch;
     switch (ch) {
-        case ';':   // for "print"
-        case 'q':   // for "quit"
-        case '(': case ')': case '+': case '-': case '*': case '/':
+        case print:   // for "print"
+        case quit:   // for "quit"
+        case '(':
+        case ')':
+        case '+':
+        case '-':
+        case '*':
+        case '/':
             return Token{ch};
         case '.':
         case '0': case '1': case '2': case '3': case '4':
@@ -46,7 +54,7 @@ Token Token_stream::get()
                 cin.putback(ch);    // put digit back into input stream
                 double val;
                 cin >> val;         // read a floating point number
-                return Token{'8', val};
+                return Token{number, val};
             }
         default:
             error("Bad token");
@@ -65,8 +73,12 @@ double primary()
                 if (t.kind != ')') error("expected ')'");
                 return d;
             }
-        case '8':
+        case number:
             return t.value;
+        case '-':
+            return -primary();
+        case '+':
+            return primary();
         default:
             error("primary expected");
     }
@@ -78,6 +90,14 @@ double term()
     Token t = ts.get();     // get the next token from the token stream
     while (true) {
         switch (t.kind) {
+            case '%':
+                {
+                    double d = primary();
+                    if (d==0) error("%:divide by zero");
+                    left = fmod(left, d);
+                    t = ts.get();
+                    break;
+                }
             case '*':
                 left *= primary();
                 t = ts.get();
@@ -118,19 +138,27 @@ double expression()
     }
 }
 
-
+void calculate()
+{
+    const string prompt = "> ";
+    const string result = "=";
+    double val = 0;
+    while (cin) {
+        cout << prompt;
+        Token t = ts.get();
+        while (t.kind == print) t=ts.get();
+        if (t.kind == quit) {
+            return;
+        }
+        ts.putback(t);
+        cout << result << expression() << endl;
+    }
+}
 
 int main()
 try {
-    double val = 0;
-    while (cin) {
-        Token t = ts.get();
-        if (t.kind == 'q') break;
-        if (t.kind == ';') cout << "=" << val << endl;
-        else
-            ts.putback(t);
-        val = expression();
-    }
+        calculate();
+        return 0;
 }
 catch (exception& e) {
     cerr << e.what() << endl;
