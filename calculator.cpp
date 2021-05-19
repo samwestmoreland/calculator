@@ -12,11 +12,27 @@ class Token_stream {
 public:
   Token get();
   void putback(Token t);
+  void ignore(char c);
 
 private:
   bool full{false}; // is there a token in this buffer?
   Token buffer;     // keep a token put back using putback()
 };
+
+void Token_stream::ignore(char c) {
+  // first look in buffer
+  if (full && c == buffer.kind) {
+    full = false;
+    return;
+  }
+  full = false;
+
+  // now search input
+  char ch = 0;
+  while (cin >> ch)
+    if (ch == c)
+      return;
+}
 
 void Token_stream::putback(Token t) {
   if (full)
@@ -144,21 +160,27 @@ double expression() {
   }
 }
 
+void clean_up_mess() { ts.ignore(print); }
+
 void calculate() {
   const string prompt = "> ";
   const string result = "=";
   double val = 0;
-  while (cin) {
-    cout << prompt;
-    Token t = ts.get();
-    while (t.kind == print)
-      t = ts.get();
-    if (t.kind == quit) {
-      return;
+  while (cin)
+    try {
+      cout << prompt;
+      Token t = ts.get();
+      while (t.kind == print)
+        t = ts.get();
+      if (t.kind == quit) {
+        return;
+      }
+      ts.putback(t);
+      cout << result << expression() << endl;
+    } catch (exception &e) {
+      cerr << e.what() << endl;
+      clean_up_mess();
     }
-    ts.putback(t);
-    cout << result << expression() << endl;
-  }
 }
 
 int main() try {
