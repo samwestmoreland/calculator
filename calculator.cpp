@@ -6,6 +6,13 @@ class Token {
 public:
   char kind;    // what kind of token
   double value; // for numbers: a value
+  string name;
+  Token() {}
+  Token(char ch) : kind{ch} {} // initialize kind with ch
+  Token(char ch, double val)
+      : kind{ch}, value{val} {} // initialize kind and value
+
+  Token(char ch, string n) : kind{ch}, name{n} {} // initialize kind and name
 };
 
 class Token_stream {
@@ -41,9 +48,90 @@ void Token_stream::putback(Token t) {
   full = true; // buffer is now full
 }
 
+class Variable {
+public:
+  string name;
+  double value;
+};
+
+vector<Variable> var_table;
+
+// return the value of the Variable named s
+double get_value(string s) {
+  for (const Variable &v : var_table) {
+    if (v.name == s) {
+      return v.value;
+    }
+  }
+  error("get: undefined variable ", s);
+}
+
+// set the variable named s to d
+void set_value(string s, double d) {
+  for (Variable &v : var_table) {
+    if (v.name == s) {
+      v.value = d;
+      return;
+    }
+  }
+  error("set: undefined variable", s);
+}
+
+// is var already in var_table?
+bool is_declared(string var) {
+  for (const Variable &v : var_table) {
+    if (v.name == var) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// add {var,val} to var_table
+double define_name(string var, double val) {
+  if (is_declared(var))
+    error(var, " declared twice");
+  var_table.push_back(Variable{var, val});
+  return val;
+}
+
+Token_stream ts;
+double expression();
+
 const char number = '8';
 const char quit = 'q';
 const char print = ';';
+const char name = 'a';        // name token
+const char let = 'L';         // declaration token
+const string declkey = "let"; // declaration keyword
+
+// handle: name = expression
+double declaration() {
+  Token t = ts.get();
+  if (t.kind != name)
+    error("name expected in declaration");
+  string var_name = t.name;
+
+  Token t2 = ts.get();
+  if (t2.kind != '=')
+    error("= missing in declaration of ", var_name);
+
+  double d = expression();
+  define_name(var_name, d);
+  return d;
+}
+
+double statement() {
+  Token t = ts.get();
+  switch (t.kind) {
+  case let:
+    return declaration();
+  default:
+    ts.putback(t);
+    return expression();
+  }
+}
+
 Token Token_stream::get() {
   if (full) {
     full = false; // remove token from buffer
@@ -61,6 +149,7 @@ Token Token_stream::get() {
   case '-':
   case '*':
   case '/':
+  case '=':
     return Token{ch};
   case '.':
   case '0':
@@ -79,16 +168,25 @@ Token Token_stream::get() {
     return Token{number, val};
   }
   default:
+    if (isalpha(ch)) {
+      string s;
+      s += ch;
+      while (cin.get(ch) && (isalpha(ch) || isdigit(ch)))
+        s += ch;
+      cin.putback(ch);
+      if (s == declkey)
+        return Token{let}; // declaration keyword
+      return Token{name, s};
+    }
     error("Bad token");
   }
 }
 
-Token_stream ts;
-double expression();
-
 double primary() {
   Token t = ts.get();
   switch (t.kind) {
+  case 'a': // handle variables
+    return get_value(t.name);
   case '(': // handle '(' expression ')'
   {
     double d = expression();
@@ -170,13 +268,13 @@ void calculate() {
     try {
       cout << prompt;
       Token t = ts.get();
-      while (t.kind == print)
+      while (t.kind == print) // discard all "prints"
         t = ts.get();
-      if (t.kind == quit) {
+      if (t.kind == quit) { // quit
         return;
       }
       ts.putback(t);
-      cout << result << expression() << endl;
+      cout << result << statement() << endl;
     } catch (exception &e) {
       cerr << e.what() << endl;
       clean_up_mess();
